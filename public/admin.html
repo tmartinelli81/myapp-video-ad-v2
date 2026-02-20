@@ -78,6 +78,11 @@ small { color: #999; font-size: 0.75rem; margin-top: 3px; display: block; }
       <p class="subtitle" id="card-org-subtitle">Questo video verrà mostrato in tutte le location che non hanno un video specifico configurato.</p>
       <form id="form-org">
         <div class="field">
+          <label>Nome video</label>
+          <input type="text" id="org-video-label" placeholder="Es: Spot estate 2025, Promo apertura...">
+          <small>Un nome per riconoscere questo video nelle statistiche</small>
+        </div>
+        <div class="field">
           <label>URL Video YouTube</label>
           <input type="url" id="org-url" placeholder="https://www.youtube.com/watch?v=...">
         </div>
@@ -102,13 +107,19 @@ small { color: #999; font-size: 0.75rem; margin-top: 3px; display: block; }
       <div class="add-form" id="add-location-form">
         <form id="form-location">
           <div class="field">
-            <label>Etichetta</label>
+            <label>Etichetta location</label>
             <input type="text" id="loc-label" placeholder="Es: Sede Milano, Ristorante Roma...">
+            <small>Nome per identificare la location nell'elenco</small>
           </div>
           <div class="field">
             <label>Wifiarea ID</label>
             <input type="text" id="loc-wifiarea" placeholder="Es: 18cde0005" required>
             <small>Trovi questo ID nei dettagli della location su Cloud4Wi</small>
+          </div>
+          <div class="field">
+            <label>Nome video</label>
+            <input type="text" id="loc-video-label" placeholder="Es: Spot estate 2025, Promo apertura...">
+            <small>Un nome per riconoscere questo video nelle statistiche</small>
           </div>
           <div class="field">
             <label>URL Video YouTube</label>
@@ -199,6 +210,7 @@ async function loadConfigs() {
   if (currentLevel === 'wifiarea') {
     orgConfig = configs.find(c => c.wifiarea_id === currentWifiareaId) || null;
     if (orgConfig) {
+      document.getElementById('org-video-label').value = orgConfig.video_label || '';
       document.getElementById('org-url').value = orgConfig.youtube_url || '';
       document.getElementById('org-duration').value = orgConfig.min_duration || 10;
       document.getElementById('btn-delete-org').style.display = 'inline-block';
@@ -207,10 +219,12 @@ async function loadConfigs() {
     orgConfig = configs.find(c => !c.wifiarea_id) || null;
     locationConfigs = configs.filter(c => !!c.wifiarea_id);
     if (orgConfig) {
+      document.getElementById('org-video-label').value = orgConfig.video_label || '';
       document.getElementById('org-url').value = orgConfig.youtube_url || '';
       document.getElementById('org-duration').value = orgConfig.min_duration || 10;
       document.getElementById('btn-delete-org').style.display = 'inline-block';
     } else {
+      document.getElementById('org-video-label').value = '';
       document.getElementById('org-url').value = '';
       document.getElementById('org-duration').value = 10;
       document.getElementById('btn-delete-org').style.display = 'none';
@@ -226,7 +240,7 @@ function renderLocationList() {
     <div class="location-item">
       <div class="location-item-info">
         <strong>${c.label || c.wifiarea_id}</strong>
-        <span>ID: ${c.wifiarea_id} · ${c.min_duration}s · <a class="yt-link" href="${c.youtube_url}" target="_blank">${c.youtube_url}</a></span>
+        <span>🎬 ${c.video_label || c.youtube_url} · ${c.min_duration}s</span>
       </div>
       <div class="location-item-actions">
         <button class="btn btn-sm" style="background:#f0f4ff;color:#2563eb" onclick="editLocation('${c.id}')">✏️</button>
@@ -242,6 +256,7 @@ function editLocation(id) {
   document.getElementById('loc-label').value = config.label || '';
   document.getElementById('loc-wifiarea').value = config.wifiarea_id || '';
   document.getElementById('loc-wifiarea').readOnly = true;
+  document.getElementById('loc-video-label').value = config.video_label || '';
   document.getElementById('loc-url').value = config.youtube_url || '';
   document.getElementById('loc-duration').value = config.min_duration || 10;
   document.getElementById('add-location-form').classList.add('open');
@@ -260,7 +275,12 @@ function setupListeners() {
     const wId = currentLevel === 'wifiarea' ? currentWifiareaId : null;
     const r = await fetch('/api/config', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tenant_id: tenantId, wifiarea_id: wId, label: null, youtube_url: document.getElementById('org-url').value, min_duration: parseInt(document.getElementById('org-duration').value) || 10 })
+      body: JSON.stringify({
+        tenant_id: tenantId, wifiarea_id: wId, label: null,
+        video_label: document.getElementById('org-video-label').value.trim(),
+        youtube_url: document.getElementById('org-url').value,
+        min_duration: parseInt(document.getElementById('org-duration').value) || 10
+      })
     });
     if (r.ok) { showFeedback('feedback-org', '✅ Configurazione salvata!', 'success'); await loadConfigs(); }
     else showFeedback('feedback-org', '❌ Errore nel salvataggio.', 'error');
@@ -277,6 +297,7 @@ function setupListeners() {
     document.getElementById('loc-label').value = '';
     document.getElementById('loc-wifiarea').value = '';
     document.getElementById('loc-wifiarea').readOnly = false;
+    document.getElementById('loc-video-label').value = '';
     document.getElementById('loc-url').value = '';
     document.getElementById('loc-duration').value = 10;
     document.getElementById('add-location-form').classList.add('open');
@@ -293,7 +314,14 @@ function setupListeners() {
     e.preventDefault();
     const r = await fetch('/api/config', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tenant_id: tenantId, wifiarea_id: document.getElementById('loc-wifiarea').value.trim(), label: document.getElementById('loc-label').value.trim(), youtube_url: document.getElementById('loc-url').value, min_duration: parseInt(document.getElementById('loc-duration').value) || 10 })
+      body: JSON.stringify({
+        tenant_id: tenantId,
+        wifiarea_id: document.getElementById('loc-wifiarea').value.trim(),
+        label: document.getElementById('loc-label').value.trim(),
+        video_label: document.getElementById('loc-video-label').value.trim(),
+        youtube_url: document.getElementById('loc-url').value,
+        min_duration: parseInt(document.getElementById('loc-duration').value) || 10
+      })
     });
     if (r.ok) {
       showFeedback('feedback-location', '✅ Location salvata!', 'success');
@@ -342,12 +370,19 @@ async function loadStats(range, from, to) {
   const byVideo = stats.by_video || [];
   document.getElementById('stats-by-video').innerHTML = byVideo.length === 0
     ? '<div class="empty">Nessun dato nel periodo selezionato.</div>'
-    : `<table class="stats-table"><thead><tr><th>Video</th><th>Totale</th><th>Completate</th><th>Utenti unici</th></tr></thead><tbody>${byVideo.map(v => `<tr><td><a class="yt-link" href="${v.youtube_url}" target="_blank">${v.youtube_url}</a></td><td>${v.total}</td><td>${v.completed}</td><td>${v.unique_customers}</td></tr>`).join('')}</tbody></table>`;
+    : `<table class="stats-table"><thead><tr><th>Video</th><th>Totale</th><th>Completate</th><th>Utenti unici</th></tr></thead><tbody>
+        ${byVideo.map(v => `<tr>
+          <td><strong>${v.video_label || '—'}</strong><br><a class="yt-link" href="${v.youtube_url}" target="_blank">${v.youtube_url}</a></td>
+          <td>${v.total}</td><td>${v.completed}</td><td>${v.unique_customers}</td>
+        </tr>`).join('')}
+       </tbody></table>`;
 
   const byLocation = stats.by_location || [];
   document.getElementById('stats-by-location').innerHTML = byLocation.length === 0
     ? '<div class="empty">Nessun dato nel periodo selezionato.</div>'
-    : `<table class="stats-table"><thead><tr><th>Location</th><th>Totale</th><th>Completate</th></tr></thead><tbody>${byLocation.map(l => `<tr><td>${l.name || l.wifiarea_id}</td><td>${l.total}</td><td>${l.completed}</td></tr>`).join('')}</tbody></table>`;
+    : `<table class="stats-table"><thead><tr><th>Location</th><th>Totale</th><th>Completate</th></tr></thead><tbody>
+        ${byLocation.map(l => `<tr><td>${l.name || l.wifiarea_id}</td><td>${l.total}</td><td>${l.completed}</td></tr>`).join('')}
+       </tbody></table>`;
 }
 
 function showFeedback(id, msg, type) {
