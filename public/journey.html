@@ -1,162 +1,156 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Guarda il video per continuare</title>
-  <script src="https://splashportal.cloud4wi.com/myapps/v1/myapps-sdk.js"></script>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      background: #0a0a0a; color: #fff;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      min-height: 100vh; display: flex; flex-direction: column;
-      align-items: center; justify-content: center; padding: 20px; gap: 20px;
-    }
-    #video-wrap { width: 100%; max-width: 640px; }
-    #player { width: 100%; aspect-ratio: 16/9; background: #111; border-radius: 8px; overflow: hidden; }
-    #progress-wrap { margin-top: 10px; display: flex; align-items: center; gap: 10px; }
-    #progress-bar { flex: 1; height: 6px; background: #333; border-radius: 3px; overflow: hidden; }
-    #progress-fill { height: 100%; background: #4ade80; width: 0%; transition: width 1s linear; }
-    #timer-label { font-size: 0.85rem; color: #aaa; white-space: nowrap; }
-    #continue-btn {
-      display: none; padding: 14px 48px; font-size: 1.1rem; font-weight: 600;
-      background: #4ade80; color: #000; border: none; border-radius: 50px; cursor: pointer;
-    }
-    #message { font-size: 0.9rem; color: #888; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guarda il video per continuare</title>
+<script src="https://splashportal.cloud4wi.com/myapps/v1/myapps-sdk.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0a0a0a; color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  min-height: 100vh; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; padding: 20px; gap: 20px;
+}
+#video-wrap { width: 100%; max-width: 640px; }
+#player { width: 100%; aspect-ratio: 16/9; background: #111; border-radius: 8px; overflow: hidden; }
+#progress-wrap { margin-top: 10px; display: flex; align-items: center; gap: 10px; }
+#progress-bar { flex: 1; height: 6px; background: #333; border-radius: 3px; overflow: hidden; }
+#progress-fill { height: 100%; background: #4ade80; width: 0%; transition: width 1s linear; }
+#timer-label { font-size: 0.85rem; color: #aaa; white-space: nowrap; }
+#continue-btn {
+  display: none; padding: 14px 48px; font-size: 1.1rem; font-weight: 600;
+  background: #4ade80; color: #000; border: none; border-radius: 50px; cursor: pointer;
+}
+#continue-btn:hover { background: #22c55e; }
+#message { font-size: 0.9rem; color: #888; }
+</style>
 </head>
 <body>
-  <div id="video-wrap">
-    <div id="player"></div>
-    <div id="progress-wrap">
-      <div id="progress-bar"><div id="progress-fill"></div></div>
-      <div id="timer-label">Caricamento...</div>
-    </div>
+<div id="video-wrap">
+  <div id="player"></div>
+  <div id="progress-wrap">
+    <div id="progress-bar"><div id="progress-fill"></div></div>
+    <div id="timer-label">Caricamento...</div>
   </div>
-  <button id="continue-btn" onclick="MYAPPS.goNext()">Continua →</button>
-  <div id="message"></div>
-  <script src="https://www.youtube.com/iframe_api"></script>
-  <script>
-    let timerInterval, secondsWatched = 0, minDuration = 10;
-    let youtubeApiReady = false, pendingPlayerInit = null;
-    let currentOrgId = null, currentLocationId = null, currentVideoUrl = null;
-    let viewRegistered = false;
+</div>
+<button id="continue-btn">Continua →</button>
+<div id="message"></div>
 
-    function onYouTubeIframeAPIReady() {
-      youtubeApiReady = true;
-      if (pendingPlayerInit) pendingPlayerInit();
+<script src="https://www.youtube.com/iframe_api"></script>
+<script>
+let timerInterval, secondsWatched = 0, minDuration = 10;
+let youtubeApiReady = false, pendingPlayerInit = null;
+let context = null, youtubeUrl = null, viewRegistered = false;
+
+function onYouTubeIframeAPIReady() {
+  youtubeApiReady = true;
+  if (pendingPlayerInit) pendingPlayerInit();
+}
+
+function extractVideoId(url) {
+  if (!url) return null;
+  const m = url.match(/(?:v=|youtu\.be\/|embed\/)([a-zA-Z0-9_-]{11})/);
+  return m ? m[1] : url;
+}
+
+function getParam(name) {
+  return new URLSearchParams(window.location.search).get(name);
+}
+
+async function registerView(completed) {
+  if (viewRegistered || !context) return;
+  viewRegistered = true;
+  try {
+    await fetch('/api/view', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tenant_id: context.tenantId,
+        wifiarea_id: context.wifiareaId || null,
+        hotspot_name: context.hotspotName || null,
+        customer_id: context.customerId || null,
+        customer_email: context.customerEmail || null,
+        youtube_url: youtubeUrl,
+        seconds_watched: secondsWatched,
+        completed: completed
+      })
+    });
+  } catch(e) {}
+}
+
+function showContinueButton(completed) {
+  clearInterval(timerInterval);
+  document.getElementById('progress-fill').style.width = '100%';
+  document.getElementById('timer-label').textContent = '✓ Pronto!';
+  const btn = document.getElementById('continue-btn');
+  btn.style.display = 'inline-block';
+  registerView(completed);
+  btn.onclick = () => MYAPPS.goNext();
+}
+
+function startTimer() {
+  if (timerInterval) return;
+  timerInterval = setInterval(() => {
+    secondsWatched++;
+    const pct = Math.min((secondsWatched / minDuration) * 100, 100);
+    document.getElementById('progress-fill').style.width = pct + '%';
+    const remaining = minDuration - secondsWatched;
+    if (remaining > 0) {
+      document.getElementById('timer-label').textContent = remaining + 's rimanenti';
+    } else {
+      showContinueButton(false);
     }
+  }, 1000);
+}
 
-    function extractVideoId(url) {
-      if (!url) return null;
-      const m = url.match(/(?:v=|youtu\.be\/|embed\/)([a-zA-Z0-9_-]{11})/);
-      return m ? m[1] : url;
-    }
-
-    function showContinueButton() {
-      clearInterval(timerInterval);
-      document.getElementById('progress-fill').style.width = '100%';
-      document.getElementById('timer-label').textContent = '✓ Pronto!';
-      document.getElementById('continue-btn').style.display = 'inline-block';
-      registerView(true);
-    }
-
-    function registerView(completed) {
-      if (viewRegistered) return;
-      viewRegistered = true;
-      fetch('/api/view', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orgId: currentOrgId,
-          locationId: currentLocationId,
-          youtubeUrl: currentVideoUrl,
-          sessionKey: window._sk || null,
-          completed
-        })
-      }).catch(() => {});
-    }
-
-    function startTimer() {
-      if (timerInterval) return;
-      // Registra la view al primo secondo di riproduzione
-      if (!viewRegistered) registerView(false);
-      timerInterval = setInterval(() => {
-        secondsWatched++;
-        const pct = Math.min((secondsWatched / minDuration) * 100, 100);
-        document.getElementById('progress-fill').style.width = pct + '%';
-        const remaining = minDuration - secondsWatched;
-        if (remaining > 0) {
-          document.getElementById('timer-label').textContent = remaining + 's rimanenti';
-        } else { showContinueButton(); }
-      }, 1000);
-    }
-
-    function initPlayer(videoId) {
-      new YT.Player('player', {
-        videoId,
-        playerVars: { autoplay: 1, mute: 1, controls: 1, rel: 0, modestbranding: 1, playsinline: 1 },
-        events: {
-          onStateChange: function(e) {
-            if (e.data === YT.PlayerState.PLAYING) startTimer();
-            else if (e.data === YT.PlayerState.PAUSED) {
-              clearInterval(timerInterval); timerInterval = null;
-            }
-            else if (e.data === YT.PlayerState.ENDED) showContinueButton();
-          }
+function initPlayer(videoId) {
+  new YT.Player('player', {
+    videoId,
+    playerVars: { autoplay: 1, mute: 1, controls: 1, rel: 0, modestbranding: 1, playsinline: 1 },
+    events: {
+      onStateChange: function(e) {
+        if (e.data === YT.PlayerState.PLAYING) startTimer();
+        else if (e.data === YT.PlayerState.PAUSED) {
+          clearInterval(timerInterval);
+          timerInterval = null;
         }
-      });
-    }
-
-    async function init() {
-      // Leggi sk dai parametri URL (passato da Cloud4Wi)
-      const params = new URLSearchParams(window.location.search);
-      window._sk = params.get('sk');
-
-      // Leggi orgId e locationId dalla sessione MyApps
-      let orgId = 'default_org';
-      let locationId = null;
-      try {
-        const sessionData = await new Promise((resolve, reject) => {
-          const t = setTimeout(() => reject('timeout'), 3000);
-          MYAPPS.session(d => { clearTimeout(t); resolve(d); });
-        });
-        orgId = sessionData?.organization?.id || sessionData?.org?.id || sessionData?.orgId || 'default_org';
-        locationId = sessionData?.location?.id || sessionData?.locationId || null;
-      } catch(e) {}
-
-      currentOrgId = orgId;
-      currentLocationId = locationId;
-
-      // Carica config: prima prova location-specific, poi org-level
-      let config = null;
-      try {
-        const url = '/api/config?orgId=' + encodeURIComponent(orgId) +
-                    (locationId ? '&locationId=' + encodeURIComponent(locationId) : '');
-        const r = await fetch(url);
-        if (r.ok) config = await r.json();
-      } catch(e) {}
-
-      // Nessun video configurato → mostra subito il pulsante
-      if (!config || !config.youtube_url) {
-        document.getElementById('timer-label').textContent = '';
-        document.getElementById('message').textContent = '';
-        showContinueButton();
-        return;
+        else if (e.data === YT.PlayerState.ENDED) showContinueButton(true);
       }
-
-      currentVideoUrl = config.youtube_url;
-      minDuration = parseInt(config.min_duration) || 10;
-      const videoId = extractVideoId(config.youtube_url);
-      document.getElementById('timer-label').textContent = minDuration + 's rimanenti';
-      document.getElementById('message').textContent = 'Guarda il video per continuare';
-
-      const doInit = () => initPlayer(videoId);
-      if (youtubeApiReady) doInit(); else pendingPlayerInit = doInit;
     }
+  });
+}
 
-    init();
-  </script>
+async function init() {
+  const sk = getParam('sk');
+  if (!sk) { MYAPPS.goNext(); return; }
+
+  let config;
+  try {
+    const r = await fetch('/api/config/journey?sk=' + encodeURIComponent(sk));
+    config = await r.json();
+  } catch(e) {
+    MYAPPS.goNext(); return;
+  }
+
+  if (!config || config.skip) { MYAPPS.goNext(); return; }
+
+  context = config.context;
+  youtubeUrl = config.youtubeUrl;
+  minDuration = parseInt(config.minDuration) || 10;
+
+  const videoId = extractVideoId(youtubeUrl);
+  if (!videoId) { MYAPPS.goNext(); return; }
+
+  document.getElementById('timer-label').textContent = minDuration + 's rimanenti';
+  document.getElementById('message').textContent = 'Guarda il video per continuare';
+
+  const doInit = () => initPlayer(videoId);
+  if (youtubeApiReady) doInit(); else pendingPlayerInit = doInit;
+}
+
+init();
+</script>
 </body>
 </html>
