@@ -169,21 +169,23 @@ app.get('/api/stats', async (req, res) => {
 app.get('/api/locations', async (req, res) => {
   const { tenant_id } = req.query;
   if (!tenant_id) return res.status(400).json({ error: 'tenant_id richiesto' });
-  try {
-    const response = await fetch(
-      `https://api.cloud4wi.com/v1/organizations/${encodeURIComponent(tenant_id)}/locations`,
-      { headers: { 'Authorization': `Bearer ${process.env.C4W_API_KEY}` } }
-    );
-    const data = await response.json();
-    const raw = data.data || data.locations || data.items || data || [];
-    const locations = Array.isArray(raw) ? raw.map(l => ({
-      id: l.id || l.wifiarea_id,
-      name: l.name || l.displayName || l.id
-    })) : [];
-    res.json(locations);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
+
+  const [{ data: viewsData }, { data: configsData }] = await Promise.all([
+    supabase.from('views').select('wifiarea_id, hotspot_name').eq('tenant_id', tenant_id).not('wifiarea_id', 'is', null),
+    supabase.from('configs').select('wifiarea_id, label').eq('tenant_id', tenant_id).not('wifiarea_id', 'is', null)
+  ]);
+
+  const locationMap = {};
+  (viewsData || []).forEach(v => {
+    if (v.wifiarea_id) locationMap[v.wifiarea_id] = { id: v.wifiarea_id, name: v.hotspot_name || v.wifiarea_id };
+  });
+  (configsData || []).forEach(c => {
+    if (c.wifiarea_id && !locationMap[c.wifiarea_id])
+      locationMap[c.wifiarea_id] = { id: c.wifiarea_id, name: c.label || c.wifiarea_id };
+  });
+
+  res.json(Object.values(locationMap));
 });
+
 
 app.listen(PORT, () => console.log('Server avviato sulla porta ' + PORT));
