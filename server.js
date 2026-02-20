@@ -24,7 +24,6 @@ async function getC4WContext(sk) {
 app.get('/api/config/journey', async (req, res) => {
   const { sk } = req.query;
   if (!sk) return res.json({ skip: true });
-
   let context;
   try { context = await getC4WContext(sk); } catch (e) { return res.json({ skip: true }); }
   if (!context) return res.json({ skip: true });
@@ -38,17 +37,14 @@ app.get('/api/config/journey', async (req, res) => {
   if (!tenantId) return res.json({ skip: true });
 
   let config = null;
-
   if (wifiareaId) {
     const { data } = await supabase.from('configs').select('*').eq('tenant_id', tenantId).eq('wifiarea_id', wifiareaId).maybeSingle();
     if (data) config = data;
   }
-
   if (!config) {
     const { data } = await supabase.from('configs').select('*').eq('tenant_id', tenantId).is('wifiarea_id', null).maybeSingle();
     if (data) config = data;
   }
-
   if (!config) return res.json({ skip: true });
 
   res.json({
@@ -137,7 +133,6 @@ app.get('/api/stats', async (req, res) => {
   (configs || []).forEach(c => { if (c.youtube_url && c.video_label) configLabelMap[c.youtube_url] = c.video_label; });
 
   const rows = data || [];
-
   const totalViews = rows.length;
   const completedViews = rows.filter(v => v.completed).length;
   const uniqueCustomers = new Set(rows.filter(v => v.customer_id).map(v => v.customer_id)).size;
@@ -147,7 +142,6 @@ app.get('/api/stats', async (req, res) => {
     const key = v.youtube_url || 'N/A';
     if (!byVideoMap[key]) byVideoMap[key] = { youtube_url: key, video_label: v.video_label || configLabelMap[key] || null, total: 0, completed: 0, customers: new Set() };
     if (!byVideoMap[key].video_label) byVideoMap[key].video_label = v.video_label || configLabelMap[key] || null;
-
     byVideoMap[key].total++;
     if (v.completed) byVideoMap[key].completed++;
     if (v.customer_id) byVideoMap[key].customers.add(v.customer_id);
@@ -192,3 +186,4 @@ app.get('/api/locations', async (req, res) => {
   }
 });
 
+app.listen(PORT, () => console.log('Server avviato sulla porta ' + PORT));
