@@ -142,6 +142,18 @@ app.get('/api/stats', async (req, res) => {
   ]);
   if (error) return res.status(500).json({ error: error.message });
 
+  // Recupera nomi location da Cloud4Wi
+  let locationNameMap = {};
+  try {
+    const token = await getC4WToken();
+    const locResponse = await fetch(
+      `https://explore.cloud4wi.com/v1/organizations/${process.env.C4W_ORG_ID}/locations?size=200`,
+      { headers: { 'Authorization': `Bearer ${token}`, 'accept': 'application/json' } }
+    );
+    const locJson = await locResponse.json();
+    (locJson.locations || []).forEach(l => { locationNameMap[l.id] = l.name; });
+  } catch (e) {}
+
   const configLabelMap = {};
   (configs || []).forEach(c => { if (c.youtube_url && c.video_label) configLabelMap[c.youtube_url] = c.video_label; });
 
@@ -159,6 +171,27 @@ app.get('/api/stats', async (req, res) => {
     if (v.completed) byVideoMap[key].completed++;
     if (v.customer_id) byVideoMap[key].customers.add(v.customer_id);
   });
+
+  const byLocationMap = {};
+  rows.forEach(v => {
+    const key = v.wifiarea_id || 'N/A';
+    const name = locationNameMap[key] || v.hotspot_name || key;
+    if (!byLocationMap[key]) byLocationMap[key] = { wifiarea_id: key, name, total: 0, completed: 0 };
+    byLocationMap[key].total++;
+    if (v.completed) byLocationMap[key].completed++;
+  });
+
+  res.json({
+    total_views: totalViews,
+    completed_views: completedViews,
+    unique_customers: uniqueCustomers,
+    by_video: Object.values(byVideoMap).map(v => ({
+      youtube_url: v.youtube_url, video_label: v.video_label, total: v.total, completed: v.completed, unique_customers: v.customers.size
+    })),
+    by_location: Object.values(byLocationMap)
+  });
+});
+
 
   const byLocationMap = {};
   rows.forEach(v => {
