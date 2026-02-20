@@ -21,17 +21,12 @@ async function getC4WContext(sk) {
   return json.data;
 }
 
-// Journey: legge contesto e restituisce config
 app.get('/api/config/journey', async (req, res) => {
   const { sk } = req.query;
   if (!sk) return res.json({ skip: true });
 
   let context;
-  try {
-    context = await getC4WContext(sk);
-  } catch (e) {
-    return res.json({ skip: true });
-  }
+  try { context = await getC4WContext(sk); } catch (e) { return res.json({ skip: true }); }
   if (!context) return res.json({ skip: true });
 
   const tenantId = context.tenant?.tenant_id;
@@ -45,22 +40,12 @@ app.get('/api/config/journey', async (req, res) => {
   let config = null;
 
   if (wifiareaId) {
-    const { data } = await supabase
-      .from('configs')
-      .select('*')
-      .eq('tenant_id', tenantId)
-      .eq('wifiarea_id', wifiareaId)
-      .maybeSingle();
+    const { data } = await supabase.from('configs').select('*').eq('tenant_id', tenantId).eq('wifiarea_id', wifiareaId).maybeSingle();
     if (data) config = data;
   }
 
   if (!config) {
-    const { data } = await supabase
-      .from('configs')
-      .select('*')
-      .eq('tenant_id', tenantId)
-      .is('wifiarea_id', null)
-      .maybeSingle();
+    const { data } = await supabase.from('configs').select('*').eq('tenant_id', tenantId).is('wifiarea_id', null).maybeSingle();
     if (data) config = data;
   }
 
@@ -70,26 +55,21 @@ app.get('/api/config/journey', async (req, res) => {
     skip: false,
     youtubeUrl: config.youtube_url,
     minDuration: config.min_duration,
+    videoLabel: config.video_label || null,
     context: { tenantId, wifiareaId, hotspotName, customerId, customerEmail }
   });
 });
 
-// Admin: elenco configs per tenant
 app.get('/api/configs', async (req, res) => {
   const { tenant_id } = req.query;
   if (!tenant_id) return res.status(400).json({ error: 'tenant_id richiesto' });
-  const { data, error } = await supabase
-    .from('configs')
-    .select('*')
-    .eq('tenant_id', tenant_id)
-    .order('created_at', { ascending: false });
+  const { data, error } = await supabase.from('configs').select('*').eq('tenant_id', tenant_id).order('created_at', { ascending: false });
   if (error) return res.status(500).json({ error: error.message });
   res.json(data || []);
 });
 
-// Admin: salva o aggiorna config
 app.post('/api/config', async (req, res) => {
-  const { tenant_id, wifiarea_id, label, youtube_url, min_duration } = req.body;
+  const { tenant_id, wifiarea_id, label, video_label, youtube_url, min_duration } = req.body;
   if (!tenant_id || !youtube_url) return res.status(400).json({ error: 'Dati mancanti' });
 
   const wId = wifiarea_id || null;
@@ -97,7 +77,13 @@ app.post('/api/config', async (req, res) => {
   existsQuery = wId ? existsQuery.eq('wifiarea_id', wId) : existsQuery.is('wifiarea_id', null);
   const { data: existing } = await existsQuery.maybeSingle();
 
-  const payload = { label: label || null, youtube_url, min_duration: parseInt(min_duration) || 10 };
+  const payload = {
+    label: label || null,
+    video_label: video_label || null,
+    youtube_url,
+    min_duration: parseInt(min_duration) || 10
+  };
+
   let result;
   if (existing) {
     result = await supabase.from('configs').update(payload).eq('id', existing.id).select().single();
@@ -109,16 +95,14 @@ app.post('/api/config', async (req, res) => {
   res.json({ success: true, data: result.data });
 });
 
-// Admin: elimina config
 app.delete('/api/config/:id', async (req, res) => {
   const { error } = await supabase.from('configs').delete().eq('id', req.params.id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
 });
 
-// Journey: registra visualizzazione
 app.post('/api/view', async (req, res) => {
-  const { tenant_id, wifiarea_id, hotspot_name, customer_id, customer_email, youtube_url, seconds_watched, completed } = req.body;
+  const { tenant_id, wifiarea_id, hotspot_name, customer_id, customer_email, youtube_url, video_label, seconds_watched, completed } = req.body;
   if (!tenant_id) return res.status(400).json({ error: 'tenant_id richiesto' });
   const { error } = await supabase.from('views').insert({
     tenant_id,
@@ -127,6 +111,7 @@ app.post('/api/view', async (req, res) => {
     customer_id: customer_id || null,
     customer_email: customer_email || null,
     youtube_url: youtube_url || null,
+    video_label: video_label || null,
     seconds_watched: parseInt(seconds_watched) || 0,
     completed: !!completed
   });
@@ -134,7 +119,6 @@ app.post('/api/view', async (req, res) => {
   res.json({ success: true });
 });
 
-// Admin: statistiche con filtri
 app.get('/api/stats', async (req, res) => {
   const { tenant_id, from, to } = req.query;
   if (!tenant_id) return res.status(400).json({ error: 'tenant_id richiesto' });
@@ -154,7 +138,8 @@ app.get('/api/stats', async (req, res) => {
   const byVideoMap = {};
   rows.forEach(v => {
     const key = v.youtube_url || 'N/A';
-    if (!byVideoMap[key]) byVideoMap[key] = { youtube_url: key, total: 0, completed: 0, customers: new Set() };
+    if (!byVideoMap[key]) byVideoMap[key] = { youtube_url: key, video_label: v.video_label || null, total: 0, completed: 0, customers: new Set() };
+    if (!byVideoMap[key].video_label && v.video_label) byVideoMap[key].video_label = v.video_label;
     byVideoMap[key].total++;
     if (v.completed) byVideoMap[key].completed++;
     if (v.customer_id) byVideoMap[key].customers.add(v.customer_id);
@@ -173,7 +158,7 @@ app.get('/api/stats', async (req, res) => {
     completed_views: completedViews,
     unique_customers: uniqueCustomers,
     by_video: Object.values(byVideoMap).map(v => ({
-      youtube_url: v.youtube_url, total: v.total, completed: v.completed, unique_customers: v.customers.size
+      youtube_url: v.youtube_url, video_label: v.video_label, total: v.total, completed: v.completed, unique_customers: v.customers.size
     })),
     by_location: Object.values(byLocationMap)
   });
