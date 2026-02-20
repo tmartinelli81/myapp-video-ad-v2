@@ -185,15 +185,25 @@ app.get('/api/locations', async (req, res) => {
 
 app.get('/api/debug/locations', async (req, res) => {
   try {
-    const response = await fetch(
-      `https://explore.cloud4wi.com/v1/organizations/${process.env.C4W_ORG_ID}/locations?size=200`,
-      { headers: { 
-        'Authorization': `Bearer ${process.env.C4W_API_KEY}`,
-        'accept': 'application/json'
-      }}
+    const authResponse = await fetch('https://explore.cloud4wi.com/v1/sts/login/services', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'accept': 'application/json' },
+      body: JSON.stringify({
+        clientKey: process.env.C4W_API_KEY,
+        clientSecret: process.env.C4W_API_SECRET
+      })
+    });
+    const authJson = await authResponse.json();
+    const token = authJson.token;
+
+    if (!token) return res.send(`<pre>AUTH FALLITA (${authResponse.status}):\n${JSON.stringify(authJson)}</pre>`);
+
+    const locResponse = await fetch(
+      `https://explore.cloud4wi.com/v1/locations/organizations/${process.env.C4W_ORG_ID}?size=200`,
+      { headers: { 'Authorization': `Bearer ${token}`, 'accept': 'application/json' } }
     );
-    const text = await response.text();
-    res.send(`<pre>STATUS: ${response.status}\nKEY USATA: ${process.env.C4W_API_KEY}\n\n${text}</pre>`);
+    const locText = await locResponse.text();
+    res.send(`<pre>AUTH OK\n\nLOCATIONS (${locResponse.status}):\n${locText}</pre>`);
   } catch (e) {
     res.send(`<pre>ERRORE: ${e.message}</pre>`);
   }
