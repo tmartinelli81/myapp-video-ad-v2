@@ -167,25 +167,22 @@ app.get('/api/stats', async (req, res) => {
 });
 
 app.get('/api/locations', async (req, res) => {
-  const { tenant_id } = req.query;
-  if (!tenant_id) return res.status(400).json({ error: 'tenant_id richiesto' });
-
-  const [{ data: viewsData }, { data: configsData }] = await Promise.all([
-    supabase.from('views').select('wifiarea_id, hotspot_name').eq('tenant_id', tenant_id).not('wifiarea_id', 'is', null),
-    supabase.from('configs').select('wifiarea_id, label').eq('tenant_id', tenant_id).not('wifiarea_id', 'is', null)
-  ]);
-
-  const locationMap = {};
-  (viewsData || []).forEach(v => {
-    if (v.wifiarea_id) locationMap[v.wifiarea_id] = { id: v.wifiarea_id, name: v.hotspot_name || v.wifiarea_id };
-  });
-  (configsData || []).forEach(c => {
-    if (c.wifiarea_id && !locationMap[c.wifiarea_id])
-      locationMap[c.wifiarea_id] = { id: c.wifiarea_id, name: c.label || c.wifiarea_id };
-  });
-
-  res.json(Object.values(locationMap));
+  try {
+    const response = await fetch(
+      `https://api.cloud4wi.com/v1/organizations/${process.env.C4W_ORG_ID}/locations?size=200`,
+      { headers: { 'Authorization': `Bearer ${process.env.C4W_API_KEY}` } }
+    );
+    const json = await response.json();
+    const locations = (json.locations || []).map(l => ({
+      id: l.id,
+      name: l.name
+    }));
+    res.json(locations);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
+
 
 
 app.listen(PORT, () => console.log('Server avviato sulla porta ' + PORT));
