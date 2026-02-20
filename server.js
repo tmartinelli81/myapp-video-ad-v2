@@ -127,10 +127,17 @@ app.get('/api/stats', async (req, res) => {
   if (from) query = query.gte('created_at', from);
   if (to) query = query.lte('created_at', to + 'T23:59:59');
 
-  const { data, error } = await query;
+  const [{ data, error }, { data: configs }] = await Promise.all([
+    query,
+    supabase.from('configs').select('youtube_url, video_label').eq('tenant_id', tenant_id)
+  ]);
   if (error) return res.status(500).json({ error: error.message });
 
+  const configLabelMap = {};
+  (configs || []).forEach(c => { if (c.youtube_url && c.video_label) configLabelMap[c.youtube_url] = c.video_label; });
+
   const rows = data || [];
+
   const totalViews = rows.length;
   const completedViews = rows.filter(v => v.completed).length;
   const uniqueCustomers = new Set(rows.filter(v => v.customer_id).map(v => v.customer_id)).size;
@@ -138,8 +145,9 @@ app.get('/api/stats', async (req, res) => {
   const byVideoMap = {};
   rows.forEach(v => {
     const key = v.youtube_url || 'N/A';
-    if (!byVideoMap[key]) byVideoMap[key] = { youtube_url: key, video_label: v.video_label || null, total: 0, completed: 0, customers: new Set() };
-    if (!byVideoMap[key].video_label && v.video_label) byVideoMap[key].video_label = v.video_label;
+    if (!byVideoMap[key]) byVideoMap[key] = { youtube_url: key, video_label: v.video_label || configLabelMap[key] || null, total: 0, completed: 0, customers: new Set() };
+    if (!byVideoMap[key].video_label) byVideoMap[key].video_label = v.video_label || configLabelMap[key] || null;
+
     byVideoMap[key].total++;
     if (v.completed) byVideoMap[key].completed++;
     if (v.customer_id) byVideoMap[key].customers.add(v.customer_id);
