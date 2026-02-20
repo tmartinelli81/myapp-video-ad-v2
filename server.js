@@ -13,6 +13,19 @@ const supabase = createClient(
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+async function getC4WToken() {
+  const response = await fetch('https://explore.cloud4wi.com/v1/sts/login/services', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'accept': 'application/json' },
+    body: JSON.stringify({
+      clientKey: process.env.C4W_API_KEY,
+      clientSecret: process.env.C4W_API_SECRET
+    })
+  });
+  const json = await response.json();
+  return json.token;
+}
+
 async function getC4WContext(sk) {
   const url = `https://volare.cloud4wi.com/controlpanel/1.0/bridge/sessions/${sk}`;
   const response = await fetch(url);
@@ -168,47 +181,17 @@ app.get('/api/stats', async (req, res) => {
 
 app.get('/api/locations', async (req, res) => {
   try {
+    const token = await getC4WToken();
     const response = await fetch(
-      `https://api.cloud4wi.com/v1/organizations/${process.env.C4W_ORG_ID}/locations?size=200`,
-      { headers: { 'Authorization': `Bearer ${process.env.C4W_API_KEY}` } }
+      `https://explore.cloud4wi.com/v1/organizations/${process.env.C4W_ORG_ID}/locations?size=200`,
+      { headers: { 'Authorization': `Bearer ${token}`, 'accept': 'application/json' } }
     );
     const json = await response.json();
-    const locations = (json.locations || []).map(l => ({
-      id: l.id,
-      name: l.name
-    }));
+    const locations = (json.locations || []).map(l => ({ id: l.id, name: l.name }));
     res.json(locations);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
-
-app.get('/api/debug/locations', async (req, res) => {
-  try {
-    const authResponse = await fetch('https://explore.cloud4wi.com/v1/sts/login/services', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'accept': 'application/json' },
-      body: JSON.stringify({
-        clientKey: process.env.C4W_API_KEY,
-        clientSecret: process.env.C4W_API_SECRET
-      })
-    });
-    const authJson = await authResponse.json();
-    const token = authJson.token;
-
-    if (!token) return res.send(`<pre>AUTH FALLITA (${authResponse.status}):\n${JSON.stringify(authJson)}</pre>`);
-
-    const locResponse = await fetch(
-`https://explore.cloud4wi.com/v1/organizations/${process.env.C4W_ORG_ID}/locations?size=200`
-      { headers: { 'Authorization': `Bearer ${token}`, 'accept': 'application/json' } }
-    );
-    const locText = await locResponse.text();
-    res.send(`<pre>AUTH OK\n\nLOCATIONS (${locResponse.status}):\n${locText}</pre>`);
-  } catch (e) {
-    res.send(`<pre>ERRORE: ${e.message}</pre>`);
-  }
-});
-
-
 
 app.listen(PORT, () => console.log('Server avviato sulla porta ' + PORT));
