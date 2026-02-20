@@ -199,7 +199,7 @@ app.get('/api/debug/locations', async (req, res) => {
     if (!token) return res.send(`<pre>AUTH FALLITA (${authResponse.status}):\n${JSON.stringify(authJson)}</pre>`);
 
     const locResponse = await fetch(
-      `https://explore.cloud4wi.com/v1/locations/organizations/${process.env.C4W_ORG_ID}?size=200`,
+`https://explore.cloud4wi.com/v1/organizations/${process.env.C4W_ORG_ID}/locations?size=200`
       { headers: { 'Authorization': `Bearer ${token}`, 'accept': 'application/json' } }
     );
     const locText = await locResponse.text();
