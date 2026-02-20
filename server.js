@@ -142,7 +142,6 @@ app.get('/api/stats', async (req, res) => {
   ]);
   if (error) return res.status(500).json({ error: error.message });
 
-  // Recupera nomi location da Cloud4Wi
   let locationNameMap = {};
   try {
     const token = await getC4WToken();
@@ -177,26 +176,6 @@ app.get('/api/stats', async (req, res) => {
     const key = v.wifiarea_id || 'N/A';
     const name = locationNameMap[key] || v.hotspot_name || key;
     if (!byLocationMap[key]) byLocationMap[key] = { wifiarea_id: key, name, total: 0, completed: 0 };
-    byLocationMap[key].total++;
-    if (v.completed) byLocationMap[key].completed++;
-  });
-
-  res.json({
-    total_views: totalViews,
-    completed_views: completedViews,
-    unique_customers: uniqueCustomers,
-    by_video: Object.values(byVideoMap).map(v => ({
-      youtube_url: v.youtube_url, video_label: v.video_label, total: v.total, completed: v.completed, unique_customers: v.customers.size
-    })),
-    by_location: Object.values(byLocationMap)
-  });
-});
-
-
-  const byLocationMap = {};
-  rows.forEach(v => {
-    const key = v.wifiarea_id || 'N/A';
-    if (!byLocationMap[key]) byLocationMap[key] = { wifiarea_id: key, name: v.hotspot_name || key, total: 0, completed: 0 };
     byLocationMap[key].total++;
     if (v.completed) byLocationMap[key].completed++;
   });
