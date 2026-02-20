@@ -185,36 +185,20 @@ app.get('/api/locations', async (req, res) => {
 
 app.get('/api/debug/locations', async (req, res) => {
   try {
-    // Step 1: ottieni il JWT token
-    const authResponse = await fetch('https://explore.cloud4wi.com/v1/sts/login/services', {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'accept': 'application/json'
-      },
-      body: JSON.stringify({
-        clientKey: process.env.C4W_API_KEY,
-        clientSecret: process.env.C4W_API_SECRET
-      })
-    });
-    const authText = await authResponse.text();
-    const authJson = JSON.parse(authText);
-    const token = authJson.token;
-
-    // Step 2: chiama le location
-    const locResponse = await fetch(
+    const response = await fetch(
       `https://explore.cloud4wi.com/v1/organizations/${process.env.C4W_ORG_ID}/locations?size=200`,
       { headers: { 
-        'Authorization': `Bearer ${token}`,
+        'Authorization': `Bearer ${process.env.C4W_API_KEY}`,
         'accept': 'application/json'
       }}
     );
-    const locText = await locResponse.text();
-    res.send(`<pre>AUTH: ${authResponse.status} - TOKEN: ${token}\n\nLOCATIONS (${locResponse.status}):\n${locText}</pre>`);
+    const text = await response.text();
+    res.send(`<pre>STATUS: ${response.status}\nKEY USATA: ${process.env.C4W_API_KEY}\n\n${text}</pre>`);
   } catch (e) {
     res.send(`<pre>ERRORE: ${e.message}</pre>`);
   }
 });
+
 
 
 app.listen(PORT, () => console.log('Server avviato sulla porta ' + PORT));
