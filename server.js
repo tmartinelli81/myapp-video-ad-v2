@@ -184,5 +184,17 @@ app.get('/api/locations', async (req, res) => {
 });
 
 
+app.get('/api/debug/locations', async (req, res) => {
+  try {
+    const response = await fetch(
+      `https://api.cloud4wi.com/v1/organizations/${process.env.C4W_ORG_ID}/locations?size=200`,
+      { headers: { 'Authorization': `Bearer ${process.env.C4W_API_KEY}` } }
+    );
+    const text = await response.text();
+    res.send(`<pre>STATUS: ${response.status}\n\n${text}</pre>`);
+  } catch (e) {
+    res.send(`<pre>ERRORE: ${e.message}</pre>`);
+  }
+});
 
 app.listen(PORT, () => console.log('Server avviato sulla porta ' + PORT));
