@@ -36,12 +36,19 @@ small { color: #999; font-size: 0.75rem; margin-top: 3px; display: block; }
 .location-item { background: #f8f9fb; border: 1px solid #eee; border-radius: 8px; padding: 10px 14px; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .location-item-info { flex: 1; min-width: 0; }
 .location-item-info strong { font-size: 0.88rem; display: block; margin-bottom: 2px; }
-.location-item-info span { font-size: 0.75rem; color: #888; word-break: break-all; }
+.location-item-info span { font-size: 0.75rem; color: #888; }
 .location-item-actions { display: flex; gap: 6px; flex-shrink: 0; }
 .toggle-add-btn { background: #f0f4ff; color: #2563eb; border: 1px dashed #2563eb; border-radius: 8px; padding: 9px; width: 100%; font-size: 0.88rem; font-weight: 600; cursor: pointer; }
 .add-form { border-top: 1px solid #eee; padding-top: 14px; margin-top: 4px; display: none; }
 .add-form.open { display: block; }
 .empty { color: #aaa; font-size: 0.88rem; text-align: center; padding: 12px 0; }
+.location-picker { border: 1px solid #ddd; border-radius: 8px; max-height: 180px; overflow-y: auto; background: #fff; }
+.location-picker-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-bottom: 1px solid #f0f0f0; cursor: pointer; }
+.location-picker-item:last-child { border-bottom: none; }
+.location-picker-item:hover { background: #f5f7ff; }
+.location-picker-item input[type="checkbox"] { width: 16px; height: 16px; accent-color: #2563eb; flex-shrink: 0; cursor: pointer; }
+.location-picker-item span { font-size: 0.88rem; }
+.location-picker-loading { padding: 12px; text-align: center; color: #aaa; font-size: 0.82rem; }
 .stats-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
 .filter-btn { padding: 5px 12px; border: 1px solid #ddd; border-radius: 20px; background: #fff; font-size: 0.82rem; cursor: pointer; }
 .filter-btn.active { background: #2563eb; color: #fff; border-color: #2563eb; }
@@ -55,7 +62,7 @@ small { color: #999; font-size: 0.75rem; margin-top: 3px; display: block; }
 .section-title { font-size: 0.75rem; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
 .stats-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
 .stats-table th { text-align: left; padding: 7px 9px; border-bottom: 2px solid #eee; color: #888; font-weight: 600; }
-.stats-table td { padding: 7px 9px; border-bottom: 1px solid #f0f0f0; word-break: break-all; }
+.stats-table td { padding: 7px 9px; border-bottom: 1px solid #f0f0f0; }
 .stats-table tr:last-child td { border-bottom: none; }
 .yt-link { color: #2563eb; text-decoration: none; font-size: 0.78rem; }
 </style>
@@ -101,24 +108,14 @@ small { color: #999; font-size: 0.75rem; margin-top: 3px; display: block; }
 
     <div class="card" id="card-locations" style="display:none">
       <h2>📍 Video specifici per location</h2>
-      <p class="subtitle">Sovrascrive il video predefinito solo per quella location.</p>
+      <p class="subtitle">Sovrascrive il video predefinito solo per le location selezionate.</p>
       <div class="location-list" id="location-list"></div>
-      <button class="toggle-add-btn" id="btn-toggle-add">＋ Aggiungi video per una location specifica</button>
+      <button class="toggle-add-btn" id="btn-toggle-add">＋ Aggiungi video per location specifiche</button>
       <div class="add-form" id="add-location-form">
         <form id="form-location">
           <div class="field">
-            <label>Etichetta location</label>
-            <input type="text" id="loc-label" placeholder="Es: Sede Milano, Ristorante Roma...">
-            <small>Nome per identificare la location nell'elenco</small>
-          </div>
-          <div class="field">
-            <label>Wifiarea ID</label>
-            <input type="text" id="loc-wifiarea" placeholder="Es: 18cde0005" required>
-            <small>Trovi questo ID nei dettagli della location su Cloud4Wi</small>
-          </div>
-          <div class="field">
             <label>Nome video</label>
-            <input type="text" id="loc-video-label" placeholder="Es: Spot estate 2025, Promo apertura...">
+            <input type="text" id="loc-video-label" placeholder="Es: Spot Milano, Promo Roma...">
             <small>Un nome per riconoscere questo video nelle statistiche</small>
           </div>
           <div class="field">
@@ -128,6 +125,13 @@ small { color: #999; font-size: 0.75rem; margin-top: 3px; display: block; }
           <div class="field">
             <label>Durata minima (secondi)</label>
             <input type="number" id="loc-duration" min="1" max="300" value="10" required>
+          </div>
+          <div class="field" id="location-picker-field">
+            <label>Seleziona location</label>
+            <div class="location-picker" id="location-picker">
+              <div class="location-picker-loading">⏳ Caricamento location...</div>
+            </div>
+            <small>Puoi selezionare più location contemporaneamente</small>
           </div>
           <div style="display:flex;gap:10px;">
             <button type="submit" class="btn btn-primary btn-sm">💾 Salva</button>
@@ -171,7 +175,7 @@ small { color: #999; font-size: 0.75rem; margin-top: 3px; display: block; }
 
 <script>
 let tenantId = null, currentLevel = null, currentWifiareaId = null;
-let orgConfig = null, locationConfigs = [], editingLocationId = null;
+let orgConfig = null, locationConfigs = [], allLocations = [], editingLocationId = null;
 
 function switchTab(name) {
   document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', ['config','stats'][i] === name));
@@ -196,11 +200,33 @@ async function init() {
     document.getElementById('card-locations').style.display = 'none';
   } else {
     document.getElementById('card-locations').style.display = 'block';
+    loadAllLocations();
   }
 
   await loadConfigs();
   await loadStats('7');
   setupListeners();
+}
+
+async function loadAllLocations() {
+  try {
+    const r = await fetch('/api/locations?tenant_id=' + encodeURIComponent(tenantId));
+    allLocations = await r.json();
+    if (!Array.isArray(allLocations)) allLocations = [];
+  } catch(e) { allLocations = []; }
+}
+
+function renderLocationPicker(selectedIds = []) {
+  const picker = document.getElementById('location-picker');
+  if (allLocations.length === 0) {
+    picker.innerHTML = '<div class="location-picker-loading">⚠️ Nessuna location trovata</div>';
+    return;
+  }
+  picker.innerHTML = allLocations.map(l => `
+    <label class="location-picker-item">
+      <input type="checkbox" value="${l.id}" ${selectedIds.includes(l.id) ? 'checked' : ''}>
+      <span>${l.name}</span>
+    </label>`).join('');
 }
 
 async function loadConfigs() {
@@ -233,40 +259,52 @@ async function loadConfigs() {
   }
 }
 
+function getLocationName(wifiareaId) {
+  const loc = allLocations.find(l => l.id === wifiareaId);
+  return loc ? loc.name : wifiareaId;
+}
+
 function renderLocationList() {
   const list = document.getElementById('location-list');
   if (locationConfigs.length === 0) { list.innerHTML = '<div class="empty">Nessuna location con video specifico configurato.</div>'; return; }
-  list.innerHTML = locationConfigs.map(c => `
+
+  const grouped = {};
+  locationConfigs.forEach(c => {
+    const key = c.youtube_url + '||' + (c.video_label || '') + '||' + (c.min_duration || 10);
+    if (!grouped[key]) grouped[key] = { config: c, locations: [] };
+    grouped[key].locations.push(c.wifiarea_id);
+  });
+
+  list.innerHTML = Object.values(grouped).map(g => `
     <div class="location-item">
       <div class="location-item-info">
-        <strong>${c.label || c.wifiarea_id}</strong>
-        <span>🎬 ${c.video_label || c.youtube_url} · ${c.min_duration}s</span>
+        <strong>🎬 ${g.config.video_label || '—'}</strong>
+        <span>${g.locations.map(id => getLocationName(id)).join(', ')} · ${g.config.min_duration}s</span>
       </div>
       <div class="location-item-actions">
-        <button class="btn btn-sm" style="background:#f0f4ff;color:#2563eb" onclick="editLocation('${c.id}')">✏️</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteLocation('${c.id}')">🗑</button>
+        <button class="btn btn-sm" style="background:#f0f4ff;color:#2563eb" onclick="editLocationGroup(${JSON.stringify(g.locations.map(id => id)).replace(/"/g, '&quot;')}, '${g.config.youtube_url}')">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteLocationGroup(${JSON.stringify(g.locations.map(id => id)).replace(/"/g, '&quot;')})">🗑</button>
       </div>
     </div>`).join('');
 }
 
-function editLocation(id) {
-  const config = locationConfigs.find(c => c.id === id);
+function editLocationGroup(wifiareaIds, youtubeUrl) {
+  const config = locationConfigs.find(c => c.wifiarea_id === wifiareaIds[0]);
   if (!config) return;
-  editingLocationId = id;
-  document.getElementById('loc-label').value = config.label || '';
-  document.getElementById('loc-wifiarea').value = config.wifiarea_id || '';
-  document.getElementById('loc-wifiarea').readOnly = true;
+  editingLocationId = wifiareaIds;
   document.getElementById('loc-video-label').value = config.video_label || '';
   document.getElementById('loc-url').value = config.youtube_url || '';
   document.getElementById('loc-duration').value = config.min_duration || 10;
+  renderLocationPicker(wifiareaIds);
   document.getElementById('add-location-form').classList.add('open');
   document.getElementById('btn-toggle-add').style.display = 'none';
 }
 
-async function deleteLocation(id) {
-  if (!confirm('Sei sicuro di voler eliminare questa configurazione?')) return;
-  const r = await fetch('/api/config/' + id, { method: 'DELETE' });
-  if (r.ok) { locationConfigs = locationConfigs.filter(c => c.id !== id); renderLocationList(); }
+async function deleteLocationGroup(wifiareaIds) {
+  if (!confirm('Eliminare la configurazione per queste location?')) return;
+  const toDelete = locationConfigs.filter(c => wifiareaIds.includes(c.wifiarea_id));
+  await Promise.all(toDelete.map(c => fetch('/api/config/' + c.id, { method: 'DELETE' })));
+  await loadConfigs();
 }
 
 function setupListeners() {
@@ -288,18 +326,16 @@ function setupListeners() {
 
   document.getElementById('btn-delete-org').addEventListener('click', async () => {
     if (!confirm('Rimuovere questo video?') || !orgConfig) return;
-    const r = await fetch('/api/config/' + orgConfig.id, { method: 'DELETE' });
-    if (r.ok) await loadConfigs();
+    await fetch('/api/config/' + orgConfig.id, { method: 'DELETE' });
+    await loadConfigs();
   });
 
   document.getElementById('btn-toggle-add').addEventListener('click', () => {
     editingLocationId = null;
-    document.getElementById('loc-label').value = '';
-    document.getElementById('loc-wifiarea').value = '';
-    document.getElementById('loc-wifiarea').readOnly = false;
     document.getElementById('loc-video-label').value = '';
     document.getElementById('loc-url').value = '';
     document.getElementById('loc-duration').value = 10;
+    renderLocationPicker([]);
     document.getElementById('add-location-form').classList.add('open');
     document.getElementById('btn-toggle-add').style.display = 'none';
   });
@@ -312,19 +348,26 @@ function setupListeners() {
 
   document.getElementById('form-location').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const r = await fetch('/api/config', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        tenant_id: tenantId,
-        wifiarea_id: document.getElementById('loc-wifiarea').value.trim(),
-        label: document.getElementById('loc-label').value.trim(),
-        video_label: document.getElementById('loc-video-label').value.trim(),
-        youtube_url: document.getElementById('loc-url').value,
-        min_duration: parseInt(document.getElementById('loc-duration').value) || 10
-      })
-    });
-    if (r.ok) {
-      showFeedback('feedback-location', '✅ Location salvata!', 'success');
+    const checked = [...document.querySelectorAll('#location-picker input[type="checkbox"]:checked')].map(cb => cb.value);
+    if (checked.length === 0) { showFeedback('feedback-location', '⚠️ Seleziona almeno una location.', 'error'); return; }
+
+    const payload = {
+      tenant_id: tenantId,
+      video_label: document.getElementById('loc-video-label').value.trim(),
+      youtube_url: document.getElementById('loc-url').value,
+      min_duration: parseInt(document.getElementById('loc-duration').value) || 10
+    };
+
+    const results = await Promise.all(checked.map(wId => {
+      const locName = getLocationName(wId);
+      return fetch('/api/config', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...payload, wifiarea_id: wId, label: locName })
+      });
+    }));
+
+    if (results.every(r => r.ok)) {
+      showFeedback('feedback-location', '✅ Salvato per ' + checked.length + ' location!', 'success');
       document.getElementById('add-location-form').classList.remove('open');
       document.getElementById('btn-toggle-add').style.display = 'block';
       editingLocationId = null;
@@ -381,7 +424,7 @@ async function loadStats(range, from, to) {
   document.getElementById('stats-by-location').innerHTML = byLocation.length === 0
     ? '<div class="empty">Nessun dato nel periodo selezionato.</div>'
     : `<table class="stats-table"><thead><tr><th>Location</th><th>Totale</th><th>Completate</th></tr></thead><tbody>
-        ${byLocation.map(l => `<tr><td>${l.name || l.wifiarea_id}</td><td>${l.total}</td><td>${l.completed}</td></tr>`).join('')}
+        ${byLocation.map(l => `<tr><td>${l.name || getLocationName(l.wifiarea_id)}</td><td>${l.total}</td><td>${l.completed}</td></tr>`).join('')}
        </tbody></table>`;
 }
 
