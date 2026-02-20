@@ -172,4 +172,23 @@ app.get('/api/stats', async (req, res) => {
   });
 });
 
-app.listen(PORT, () => console.log('Server avviato sulla porta ' + PORT));
+app.get('/api/locations', async (req, res) => {
+  const { tenant_id } = req.query;
+  if (!tenant_id) return res.status(400).json({ error: 'tenant_id richiesto' });
+  try {
+    const response = await fetch(
+      `https://api.cloud4wi.com/v1/organizations/${encodeURIComponent(tenant_id)}/locations`,
+      { headers: { 'Authorization': `Bearer ${process.env.C4W_API_KEY}` } }
+    );
+    const data = await response.json();
+    const raw = data.data || data.locations || data.items || data || [];
+    const locations = Array.isArray(raw) ? raw.map(l => ({
+      id: l.id || l.wifiarea_id,
+      name: l.name || l.displayName || l.id
+    })) : [];
+    res.json(locations);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
