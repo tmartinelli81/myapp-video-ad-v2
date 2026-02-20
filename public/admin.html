@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — Video Journey</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0f0f0f; color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh; display: flex; flex-direction: column;
+      align-items: center; padding: 40px 20px; gap: 32px;
+    }
+    h1 { font-size: 1.5rem; font-weight: 700; }
+    .card {
+      background: #1a1a1a; border-radius: 12px;
+      padding: 28px; width: 100%; max-width: 560px; display: flex;
+      flex-direction: column; gap: 16px;
+    }
+    .card h2 { font-size: 1rem; color: #aaa; text-transform: uppercase; letter-spacing: .05em; }
+    label { font-size: 0.9rem; color: #ccc; display: flex; flex-direction: column; gap: 6px; }
+    input, select {
+      background: #2a2a2a; border: 1px solid #333; color: #fff;
+      border-radius: 8px; padding: 10px 14px; font-size: 1rem; outline: none;
+    }
+    input:focus, select:focus { border-color: #4ade80; }
+    button {
+      padding: 12px; background: #4ade80; color: #000; font-weight: 700;
+      border: none; border-radius: 8px; cursor: pointer; font-size: 1rem;
+    }
+    button:hover { background: #22c55e; }
+    .msg { font-size: 0.9rem; color: #4ade80; min-height: 20px; }
+    .stats-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+    }
+    .stat {
+      background: #2a2a2a; border-radius: 8px; padding: 16px;
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+    }
+    .stat-value { font-size: 1.8rem; font-weight: 700; color: #4ade80; }
+    .stat-label { font-size: 0.75rem; color: #888; }
+    .filter-row { display: flex; gap: 10px; align-items: flex-end; }
+    .filter-row label { flex: 1; }
+    .filter-row button { padding: 10px 16px; white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <h1>🎬 Video Journey — Admin</h1>
+
+  <!-- Configurazione Video -->
+  <div class="card">
+    <h2>Configurazione Video</h2>
+    <label>Org ID
+      <input id="cfg-org" type="text" placeholder="es. org_abc123" />
+    </label>
+    <label>Location ID <span style="color:#666">(opzionale)</span>
+      <input id="cfg-loc" type="text" placeholder="lascia vuoto per default org" />
+    </label>
+    <label>URL YouTube
+      <input id="cfg-url" type="text" placeholder="https://www.youtube.com/watch?v=..." />
+    </label>
+    <label>Durata minima (secondi)
+      <input id="cfg-dur" type="number" value="10" min="1" max="300" />
+    </label>
+    <button onclick="saveConfig()">💾 Salva Configurazione</button>
+    <div class="msg" id="cfg-msg"></div>
+  </div>
+
+  <!-- Carica Config Esistente -->
+  <div class="card">
+    <h2>Carica Config Esistente</h2>
+    <div class="filter-row">
+      <label>Org ID
+        <input id="load-org" type="text" placeholder="org_abc123" />
+      </label>
+      <label>Location ID
+        <input id="load-loc" type="text" placeholder="opzionale" />
+      </label>
+      <button onclick="loadConfig()">🔍 Carica</button>
+    </div>
+    <div class="msg" id="load-msg"></div>
+  </div>
+
+  <!-- Statistiche -->
+  <div class="card">
+    <h2>Statistiche Visualizzazioni</h2>
+    <label>Org ID
+      <input id="stat-org" type="text" placeholder="org_abc123" />
+    </label>
+    <div class="filter-row">
+      <label>Dal
+        <input id="stat-from" type="date" />
+      </label>
+      <label>Al
+        <input id="stat-to" type="date" />
+      </label>
+      <button onclick="loadStats()">📊 Mostra</button>
+    </div>
+    <div class="stats-grid" id="stats-grid" style="display:none">
+      <div class="stat">
+        <div class="stat-value" id="st-total">0</div>
+        <div class="stat-label">Visualizzazioni totali</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="st-unique">0</div>
+        <div class="stat-label">Utenti unici</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="st-completed">0</div>
+        <div class="stat-label">Video completati</div>
+      </div>
+    </div>
+    <div class="msg" id="stat-msg"></div>
+  </div>
+
+  <script>
+    async function saveConfig() {
+      const orgId = document.getElementById('cfg-org').value.trim();
+      const locationId = document.getElementById('cfg-loc').value.trim() || null;
+      const youtubeUrl = document.getElementById('cfg-url').value.trim();
+      const minDuration = parseInt(document.getElementById('cfg-dur').value) || 10;
+      const msg = document.getElementById('cfg-msg');
+
+      if (!orgId || !youtubeUrl) { msg.textContent = '⚠️ Org ID e URL sono obbligatori'; return; }
+
+      try {
+        const r = await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orgId, locationId, youtubeUrl, minDuration })
+        });
+        const data = await r.json();
+        msg.textContent = data.success ? '✅ Configurazione salvata!' : '❌ Errore: ' + JSON.stringify(data);
+      } catch(e) { msg.textContent = '❌ Errore di rete'; }
+    }
+
+    async function loadConfig() {
+      const orgId = document.getElementById('load-org').value.trim();
+      const locationId = document.getElementById('load-loc').value.trim();
+      const msg = document.getElementById('load-msg');
+
+      if (!orgId) { msg.textContent = '⚠️ Inserisci un Org ID'; return; }
+
+      try {
+        const url = '/api/config?orgId=' + encodeURIComponent(orgId) +
+                    (locationId ? '&locationId=' + encodeURIComponent(locationId) : '');
+        const r = await fetch(url);
+        const data = await r.json();
+        if (!data) { msg.textContent = '⚠️ Nessuna config trovata'; return; }
+
+        document.getElementById('cfg-org').value = data.org_id || '';
+        document.getElementById('cfg-loc').value = data.location_id || '';
+        document.getElementById('cfg-url').value = data.youtube_url || '';
+        document.getElementById('cfg-dur').value = data.min_duration || 10;
+        msg.textContent = '✅ Config caricata nei campi sopra';
+      } catch(e) { msg.textContent = '❌ Errore di rete'; }
+    }
+
+    async function loadStats() {
+      const orgId = document.getElementById('stat-org').value.trim();
+      const from = document.getElementById('stat-from').value;
+      const to = document.getElementById('stat-to').value;
+      const msg = document.getElementById('stat-msg');
+
+      if (!orgId) { msg.textContent = '⚠️ Inserisci un Org ID'; return; }
+
+      try {
+        let url = '/api/stats?orgId=' + encodeURIComponent(orgId);
+        if (from) url += '&from=' + from;
+        if (to) url += '&to=' + to;
+
+        const r = await fetch(url);
+        const data = await r.json();
+
+        document.getElementById('st-total').textContent = data.totalViews || 0;
+        document.getElementById('st-unique').textContent = data.uniqueUsers || 0;
+        document.getElementById('st-completed').textContent = data.completed || 0;
+        document.getElementById('stats-grid').style.display = 'grid';
+        msg.textContent = '';
+      } catch(e) { msg.textContent = '❌ Errore di rete'; }
+    }
+  </script>
+</body>
+</html>
